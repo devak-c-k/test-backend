@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     // Send Push Notification
     if (user.push_token && Expo.isExpoPushToken(user.push_token)) {
       try {
-        await expo.sendPushNotificationsAsync([
+        const tickets = await expo.sendPushNotificationsAsync([
           {
             to: user.push_token,
             sound: 'default', // Plays default listing sound
@@ -71,7 +71,7 @@ export async function POST(request: Request) {
             },
           } as any,
         ]);
-        console.log('Push notification sent to:', user.push_token);
+        console.log('Push notification tickets:', JSON.stringify(tickets, null, 2));
       } catch (error) {
         console.error('Error sending push notification:', error);
       }
