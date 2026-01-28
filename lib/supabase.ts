@@ -60,7 +60,7 @@ export interface Debt {
   due_date: string | null;
   is_recurring: boolean;
   reminder_enabled: boolean;
-  reminder_schedule: 'daily' | 'weekly' | 'monthly' | 'custom' | null;
+  reminder_schedule: 'daily' | 'weekly' | 'monthly' | 'custom' | 'once' | null;
   reminder_day_of_week: number | null;
   reminder_day_of_month: number | null;
   reminder_time: string;

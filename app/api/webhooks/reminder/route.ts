@@ -58,15 +58,18 @@ export async function POST(request: Request) {
         await expo.sendPushNotificationsAsync([
           {
             to: user.push_token,
-            sound: 'default',
-            title: `Reminder: ${debt.name}`,
-            body: `${debt.direction === 'owed' ? 'You owe' : 'You are owed'} ₹${debt.amount}`,
+            sound: 'default', // Plays default listing sound
+            title: `🔔 Reminder: ${debt.name}`,
+            body: `${debt.direction === 'owed' ? '🔴 You owe' : '🟢 You are owed'} ₹${debt.amount}`,
+            channelId: 'default', // Important for Android 8+
+            priority: 'high', // For Android
+            color: '#7C3AED', // Primary purple color for icon background (Android)
             data: {
               debt_id,
               debt_type: debt.debt_type,
               amount: debt.amount,
             },
-          },
+          } as any,
         ]);
         console.log('Push notification sent to:', user.push_token);
       } catch (error) {
@@ -131,6 +134,8 @@ function calculateNextReminderDate(debt: any): Date | null {
       next.setHours(hours, minutes, 0, 0);
       return next;
     }
+    case 'once':
+      return null;
     default:
       return null;
   }
