@@ -79,8 +79,8 @@ export async function POST(request: Request) {
         console.log('No valid push token for user:', user.id);
     }
 
-    // If recurring, schedule the next reminder
-    if (debt.is_recurring && debt.reminder_enabled) {
+    // If schedule is recurring (not 'once'), schedule the next reminder
+    if (debt.reminder_enabled && debt.reminder_schedule && debt.reminder_schedule !== 'once') {
       const nextScheduledFor = calculateNextReminderDate(debt);
       
       if (nextScheduledFor) {
