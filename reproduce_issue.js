@@ -2,44 +2,43 @@ const { Expo } = require('expo-server-sdk');
 
 const expo = new Expo();
 
-const messages = [
-    {
-        to: 'ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]',
-        sound: 'default',
-        title: 'Test',
-        body: 'Test body',
-        color: '#7C3AED', // The suspicious color
-    }
+// Fake token - format must be valid for isExpoPushToken
+const token = 'ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]';
+
+const colorsToTest = [
+    '#7C3AED', // Original Uppercase
+    '#7c3aed', // Lowercase
+    '#FFFFFF', // White
+    '#000000', // Black
+    'blue',    // Invalid
+    '#123',    // Short (Invalid?)
 ];
 
-try {
-    // We don't need to actually send it, just constructing logic inside SDK usually validates?
-    // Actually Expo.chunkPushNotifications does validation?
-    // sendPushNotificationsAsync does validation.
+async function test() {
+    console.log("Starting reproduction test...");
 
-    // Note: We need to mock the implementation or just see if the library throws immediately on validation before network.
-    // The error "Must be a valid hex color" suggests it's a synchronous validation error.
+    for (const color of colorsToTest) {
+        const messages = [{
+            to: token,
+            title: 'Test',
+            body: 'Test body',
+            color: color,
+        }];
 
-    // Let's call the private validation method if accessible or just try to send (it will fail network but pass validation if valid)
-    // However, SDK might validate before fetch.
-
-    // The error stack trace in the user prompt:
-    // at async POST (app\api\webhooks\reminder\route.ts:58:9)
-    // implies it failed at await expo.sendPushNotificationsAsync
-
-    console.log("Testing color: #7C3AED");
-
-    // Create a chunk to see if validation happens during chunking (which is what usually happens or what users usually use)
-    // But code uses sendPushNotificationsAsync directly.
-
-    // Let's rely on the fact that sendPushNotificationsAsync calls chunking internally or validates.
-
-    expo.sendPushNotificationsAsync(messages)
-        .then(tickets => console.log("Tickets:", tickets))
-        .catch(error => {
-            console.error("Caught error:", error);
-        });
-
-} catch (error) {
-    console.error("Sync error:", error);
+        console.log(`Testing color: "${color}"`);
+        try {
+            // We expect this to fail with a network error probably (invalid token/network),
+            // OR a validation error if the color is invalid.
+            await expo.sendPushNotificationsAsync(messages);
+            console.log(`  -> SUCCESS (No validation error) for ${color}`);
+        } catch (error) {
+            if (error.code === 'VALIDATION_ERROR' || error.message.includes('Must be a valid hex color')) {
+                console.error(`  -> VALIDATION ERROR for ${color}: ${error.message}`);
+            } else {
+                console.log(`  -> Other Error (likely network/token) which means VALIDATION PASSED for ${color}. Error: ${error.code || error.message}`);
+            }
+        }
+    }
 }
+
+test().catch(console.error);

@@ -63,7 +63,7 @@ export async function POST(request: Request) {
             body: `${debt.direction === 'owed' ? '🔴 You owe' : '🟢 You are owed'} ₹${debt.amount}`,
             channelId: 'default', // Important for Android 8+
             priority: 'high', // For Android
-            color: '#7C3AED', // Primary purple color for icon background (Android)
+            color: '#7c3aed', // Primary purple color for icon background (Android)
             data: {
               debt_id,
               debt_type: debt.debt_type,
