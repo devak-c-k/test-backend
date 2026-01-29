@@ -37,8 +37,7 @@ export const addExpenseTool: FunctionDeclaration = {
       },
       type: {
         type: SchemaType.STRING,
-        description: 'Transaction type: "expense" or "income". Defaults to "expense".',
-        enum: ['expense', 'income'],
+        description: 'Transaction type. Must be either "expense" or "income". Defaults to "expense".',
       },
     },
     required: ['amount', 'category'],
@@ -180,13 +179,11 @@ export const addDebtTool: FunctionDeclaration = {
       },
       debt_type: {
         type: SchemaType.STRING,
-        description: 'Type of debt',
-        enum: ['rent', 'loan', 'subscription', 'emi', 'other'],
+        description: 'Type of debt. Must be one of: "rent", "loan", "subscription", "emi", "other"',
       },
       direction: {
         type: SchemaType.STRING,
-        description: '"owed" = money you owe to someone, "receivable" = money someone owes to you',
-        enum: ['owed', 'receivable'],
+        description: 'Direction of debt. Must be "owed" (money you owe to someone) or "receivable" (money someone owes to you)',
       },
       description: {
         type: SchemaType.STRING,
@@ -278,8 +275,7 @@ export const getDebtsTool: FunctionDeclaration = {
     properties: {
       direction: {
         type: SchemaType.STRING,
-        description: 'Filter by direction: "owed" or "receivable"',
-        enum: ['owed', 'receivable'],
+        description: 'Filter by direction. Must be "owed" or "receivable"',
       },
       is_paid: {
         type: SchemaType.BOOLEAN,
@@ -287,8 +283,7 @@ export const getDebtsTool: FunctionDeclaration = {
       },
       debt_type: {
         type: SchemaType.STRING,
-        description: 'Filter by type',
-        enum: ['rent', 'loan', 'subscription', 'emi', 'other'],
+        description: 'Filter by type. Must be one of: "rent", "loan", "subscription", "emi", "other"',
       },
     },
     required: [],
@@ -364,8 +359,7 @@ export const getCategoriesCool: FunctionDeclaration = {
     properties: {
       category_type: {
         type: SchemaType.STRING,
-        description: 'Filter by type: "expense" or "income"',
-        enum: ['expense', 'income'],
+        description: 'Filter by type. Must be "expense" or "income"',
       },
     },
     required: [],
