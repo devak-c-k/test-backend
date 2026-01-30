@@ -16,6 +16,10 @@ async function testSMSParsing() {
     {
       sender: 'AXISBK',
       message: 'OTP for txn is 123456. Do not share this with anyone.'
+    },
+    {
+      sender: 'JM-BOIIND-S',
+      message: 'BOI -  Rs.1.00 Credited to your Ac XX0983 on 30-01-26 by UPI ref No.603107874045.Avl Bal 48.69'
     }
   ];
 
