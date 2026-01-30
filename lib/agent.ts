@@ -331,6 +331,56 @@ export class FinancialAgent {
           };
         }
 
+        // ==================== FORECASTING & ANALYSIS TOOLS ====================
+        case 'get_multi_month_comparison': {
+          const comparison = await this.dataBoundary.getMultiMonthComparison(params.num_months || 6);
+          return {
+            success: true,
+            data: comparison,
+            message: `Compared ${comparison.months.length} months of data`,
+          };
+        }
+
+        case 'get_spending_trends': {
+          const trends = await this.dataBoundary.getSpendingTrends(params.num_months || 6, params.category);
+          return {
+            success: true,
+            data: trends,
+            message: `Analyzed spending trends: ${trends.analysis.overallTrend}`,
+          };
+        }
+
+        case 'get_financial_forecast': {
+          const forecast = await this.dataBoundary.getFinancialForecast(params.forecast_months || 3, params.target_savings);
+          return {
+            success: true,
+            data: forecast,
+            message: `Generated ${forecast.forecast.length} month forecast`,
+          };
+        }
+
+        case 'check_affordability': {
+          const affordability = await this.dataBoundary.checkAffordability(
+            params.item_name,
+            params.item_cost,
+            params.current_savings
+          );
+          return {
+            success: true,
+            data: affordability,
+            message: affordability.affordabilityAnalysis,
+          };
+        }
+
+        case 'get_budget_recommendation': {
+          const recommendation = await this.dataBoundary.getBudgetRecommendation(params.savings_goal_percent);
+          return {
+            success: true,
+            data: recommendation,
+            message: recommendation.overallAdvice,
+          };
+        }
+
         default:
           return {
             success: false,
@@ -353,7 +403,7 @@ export class FinancialAgent {
     const context = await this.dataBoundary.loadUserContext();
     const now = new Date();
 
-    return `You are a smart financial assistant helping the user manage their expenses, income, debts, and reminders.
+    return `You are a powerful AI financial agent with advanced analytical capabilities. You help users manage their finances, analyze spending patterns, and make informed financial decisions.
 
 CURRENT CONTEXT:
 - Date: ${now.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
@@ -378,15 +428,32 @@ ${context.unpaidDebts.map((d: any) => `- ${d.name}: ₹${d.amount} (${d.type})${
 UPCOMING REMINDERS:
 ${context.upcomingReminders.map((r: any) => `- ${r.debtName} at ${new Date(r.scheduledFor).toLocaleString()}`).join('\n') || 'No upcoming reminders'}
 
+YOUR CAPABILITIES:
+1. **Transaction Management**: Add, update, delete expenses and income
+2. **Financial Analysis**: Analyze spending patterns, compare months, identify trends
+3. **Forecasting**: Predict future savings, estimate when goals can be reached
+4. **Affordability Checks**: Calculate if user can afford purchases and when
+5. **Budget Recommendations**: Suggest spending adjustments based on goals
+6. **Debt Tracking**: Manage debts, subscriptions, EMIs, and payments
+7. **Reminders**: Set payment reminders
+
 INSTRUCTIONS:
-1. Use the available tools to perform actions the user requests
-2. Be helpful and conversational
-3. When adding expenses, match categories intelligently (e.g., "coffee" -> "Food & Dining")
-4. For dates, interpret natural language (e.g., "yesterday", "last Monday")
-5. Always confirm successful actions
-6. If unsure, ask for clarification
-7. Use ₹ for currency (Indian Rupees)
-8. Keep responses concise but informative`;
+1. Use the available tools proactively to fully answer user questions
+2. For questions about affordability (e.g., "Can I afford X?"), use the check_affordability tool
+3. For questions comparing months (e.g., "Which month did I spend most?"), use get_multi_month_comparison
+4. For trend analysis, use get_spending_trends
+5. For future projections, use get_financial_forecast
+6. When adding expenses, match categories intelligently (e.g., "coffee" -> "Food & Dining")
+7. For dates, interpret natural language (e.g., "yesterday", "last Monday")
+8. Always provide specific numbers and insights, not vague responses
+9. Use ₹ for currency (Indian Rupees)
+10. Be proactive - if user asks "How am I doing financially?", pull relevant stats and trends
+
+RESPONSE STYLE:
+- Be direct and provide specific numbers
+- Give actionable insights, not just data
+- If you can calculate something, do it
+- Explain your reasoning briefly`;
   }
 
   /**

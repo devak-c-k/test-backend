@@ -752,8 +752,300 @@ export class UserDataBoundary {
   }
 
   // ============================================================================
+  // FORECASTING & ANALYSIS
+  // ============================================================================
+
+  async getMultiMonthComparison(numMonths: number = 6): Promise<any> {
+    const months = Math.min(Math.max(numMonths, 2), 12);
+    const monthlyData: any[] = [];
+    const now = new Date();
+
+    for (let i = 0; i < months; i++) {
+      const targetDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const year = targetDate.getFullYear();
+      const month = targetDate.getMonth() + 1;
+      
+      try {
+        const stats = await this.getMonthlyStats(year, month);
+        monthlyData.push({
+          year,
+          month,
+          monthName: new Date(year, month - 1, 1).toLocaleString('default', { month: 'short', year: 'numeric' }),
+          totalSpent: stats.totalSpent,
+          totalIncome: stats.totalIncome,
+          netBalance: stats.netBalance,
+          savingsRate: stats.savingsRate,
+          transactionCount: stats.transactionCount,
+          topCategory: stats.topCategory?.name || 'N/A',
+        });
+      } catch (e) {
+        // Skip months with errors
+      }
+    }
+
+    // Calculate insights
+    const validMonths = monthlyData.filter(m => m.totalSpent > 0 || m.totalIncome > 0);
+    
+    if (validMonths.length === 0) {
+      return { 
+        months: [], 
+        insights: { message: 'No data available for analysis' } 
+      };
+    }
+
+    const highestSpending = validMonths.reduce((max, m) => m.totalSpent > max.totalSpent ? m : max, validMonths[0]);
+    const lowestSpending = validMonths.filter(m => m.totalSpent > 0).reduce((min, m) => m.totalSpent < min.totalSpent ? m : min, validMonths[0]);
+    const avgSpending = validMonths.reduce((sum, m) => sum + m.totalSpent, 0) / validMonths.length;
+    const avgIncome = validMonths.reduce((sum, m) => sum + m.totalIncome, 0) / validMonths.length;
+    const avgSavingsRate = validMonths.reduce((sum, m) => sum + m.savingsRate, 0) / validMonths.length;
+
+    return {
+      months: monthlyData.reverse(), // Chronological order
+      insights: {
+        highestSpendingMonth: {
+          month: highestSpending.monthName,
+          amount: highestSpending.totalSpent,
+        },
+        lowestSpendingMonth: {
+          month: lowestSpending.monthName,
+          amount: lowestSpending.totalSpent,
+        },
+        averageMonthlySpending: Math.round(avgSpending),
+        averageMonthlyIncome: Math.round(avgIncome),
+        averageSavingsRate: Math.round(avgSavingsRate),
+        totalPeriodSpending: validMonths.reduce((sum, m) => sum + m.totalSpent, 0),
+        totalPeriodIncome: validMonths.reduce((sum, m) => sum + m.totalIncome, 0),
+      },
+    };
+  }
+
+  async getSpendingTrends(numMonths: number = 6, category?: string): Promise<any> {
+    const comparison = await this.getMultiMonthComparison(numMonths);
+    const months = comparison.months;
+
+    if (months.length < 2) {
+      return { 
+        trends: [],
+        analysis: { message: 'Need at least 2 months of data for trend analysis' }
+      };
+    }
+
+    // Calculate month-over-month changes
+    const trends = months.slice(1).map((month: any, index: number) => {
+      const prevMonth = months[index];
+      const spendingChange = month.totalSpent - prevMonth.totalSpent;
+      const spendingChangePercent = prevMonth.totalSpent > 0 
+        ? Math.round((spendingChange / prevMonth.totalSpent) * 100) 
+        : 0;
+
+      return {
+        month: month.monthName,
+        totalSpent: month.totalSpent,
+        spendingChange,
+        spendingChangePercent,
+        direction: spendingChange > 0 ? 'increased' : spendingChange < 0 ? 'decreased' : 'stable',
+      };
+    });
+
+    // Determine overall trend
+    const recentTrends = trends.slice(-3);
+    const increasingCount = recentTrends.filter((t: any) => t.direction === 'increased').length;
+    const decreasingCount = recentTrends.filter((t: any) => t.direction === 'decreased').length;
+    
+    let overallTrend = 'stable';
+    if (increasingCount >= 2) overallTrend = 'increasing';
+    if (decreasingCount >= 2) overallTrend = 'decreasing';
+
+    // Find unusual months (spending > 1.5x average)
+    const avgSpending = months.reduce((sum: number, m: any) => sum + m.totalSpent, 0) / months.length;
+    const unusualMonths = months.filter((m: any) => m.totalSpent > avgSpending * 1.5);
+
+    return {
+      trends,
+      analysis: {
+        overallTrend,
+        averageSpending: Math.round(avgSpending),
+        unusualMonths: unusualMonths.map((m: any) => ({
+          month: m.monthName,
+          amount: m.totalSpent,
+          percentAboveAverage: Math.round(((m.totalSpent - avgSpending) / avgSpending) * 100),
+        })),
+        recommendation: overallTrend === 'increasing' 
+          ? 'Your spending is trending upward. Consider reviewing your expenses to identify areas to cut back.'
+          : overallTrend === 'decreasing'
+          ? 'Great job! Your spending is trending downward. Keep up the good work!'
+          : 'Your spending is relatively stable.',
+      },
+    };
+  }
+
+  async getFinancialForecast(forecastMonths: number = 3, targetSavings?: number): Promise<any> {
+    const comparison = await this.getMultiMonthComparison(6);
+    const months = comparison.months;
+
+    if (months.length < 2) {
+      return { 
+        forecast: [],
+        message: 'Need more historical data for accurate forecasting'
+      };
+    }
+
+    // Calculate averages from historical data
+    const avgIncome = months.reduce((sum: number, m: any) => sum + m.totalIncome, 0) / months.length;
+    const avgSpending = months.reduce((sum: number, m: any) => sum + m.totalSpent, 0) / months.length;
+    const avgMonthlySavings = avgIncome - avgSpending;
+
+    // Generate forecast
+    const forecast = [];
+    let cumulativeSavings = 0;
+    const now = new Date();
+
+    for (let i = 1; i <= Math.min(forecastMonths, 12); i++) {
+      const forecastDate = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      cumulativeSavings += avgMonthlySavings;
+
+      forecast.push({
+        month: forecastDate.toLocaleString('default', { month: 'short', year: 'numeric' }),
+        projectedIncome: Math.round(avgIncome),
+        projectedSpending: Math.round(avgSpending),
+        projectedSavings: Math.round(avgMonthlySavings),
+        cumulativeSavings: Math.round(cumulativeSavings),
+      });
+    }
+
+    // Calculate time to reach target savings
+    let monthsToTarget = null;
+    if (targetSavings && avgMonthlySavings > 0) {
+      monthsToTarget = Math.ceil(targetSavings / avgMonthlySavings);
+    }
+
+    return {
+      forecast,
+      summary: {
+        averageMonthlyIncome: Math.round(avgIncome),
+        averageMonthlySpending: Math.round(avgSpending),
+        averageMonthlySavings: Math.round(avgMonthlySavings),
+        projectedSavingsIn3Months: Math.round(avgMonthlySavings * 3),
+        projectedSavingsIn6Months: Math.round(avgMonthlySavings * 6),
+        projectedSavingsIn12Months: Math.round(avgMonthlySavings * 12),
+        monthsToTargetSavings: monthsToTarget,
+        savingsRate: avgIncome > 0 ? Math.round((avgMonthlySavings / avgIncome) * 100) : 0,
+      },
+    };
+  }
+
+  async checkAffordability(itemName: string, itemCost: number, currentSavings?: number): Promise<any> {
+    const forecast = await this.getFinancialForecast(12);
+    const avgMonthlySavings = forecast.summary.averageMonthlySavings;
+    const currentStats = await this.getMonthlyStats();
+
+    // Estimate current savings (use provided or calculate)
+    const estimatedCurrentSavings = currentSavings || currentStats.netBalance;
+
+    // Calculate affordability
+    const canAffordNow = estimatedCurrentSavings >= itemCost;
+    const remainingAmount = itemCost - estimatedCurrentSavings;
+    
+    let monthsNeeded = 0;
+    let targetDate = null;
+
+    if (!canAffordNow && avgMonthlySavings > 0) {
+      monthsNeeded = Math.ceil(remainingAmount / avgMonthlySavings);
+      targetDate = new Date();
+      targetDate.setMonth(targetDate.getMonth() + monthsNeeded);
+    }
+
+    // Suggest ways to afford it faster
+    const suggestions = [];
+    if (!canAffordNow) {
+      if (currentStats.categoryBreakdown && currentStats.categoryBreakdown.length > 0) {
+        const topSpending = currentStats.categoryBreakdown[0];
+        suggestions.push(`Reduce ${topSpending.name} spending by 20% to save ₹${Math.round(topSpending.total * 0.2)} more per month`);
+      }
+      if (avgMonthlySavings < itemCost * 0.1) {
+        suggestions.push('Consider setting a specific savings goal for this purchase');
+      }
+      if (monthsNeeded > 6) {
+        suggestions.push('Consider a small monthly transfer to a dedicated savings account');
+      }
+    }
+
+    return {
+      item: itemName,
+      cost: itemCost,
+      currentSavings: Math.round(estimatedCurrentSavings),
+      canAffordNow,
+      remainingAmount: Math.max(0, Math.round(remainingAmount)),
+      monthsNeeded: canAffordNow ? 0 : monthsNeeded,
+      targetDate: targetDate ? targetDate.toLocaleString('default', { month: 'long', year: 'numeric' }) : null,
+      monthlySavingsRate: avgMonthlySavings,
+      affordabilityAnalysis: canAffordNow 
+        ? `You can afford the ${itemName} right now!`
+        : avgMonthlySavings <= 0
+        ? `At your current spending rate, you're not saving money. Consider reducing expenses.`
+        : `At your current savings rate of ₹${Math.round(avgMonthlySavings)}/month, you can afford the ${itemName} in ${monthsNeeded} month(s) (by ${targetDate?.toLocaleString('default', { month: 'long', year: 'numeric' })}).`,
+      suggestions,
+    };
+  }
+
+  async getBudgetRecommendation(savingsGoalPercent?: number): Promise<any> {
+    const comparison = await this.getMultiMonthComparison(3);
+    const currentStats = await this.getMonthlyStats();
+    
+    const avgIncome = comparison.insights.averageMonthlyIncome || currentStats.totalIncome;
+    const avgSpending = comparison.insights.averageMonthlySpending || currentStats.totalSpent;
+    const targetSavingsPercent = savingsGoalPercent || 20; // Default 20%
+
+    const targetSavings = avgIncome * (targetSavingsPercent / 100);
+    const currentSavings = avgIncome - avgSpending;
+    const additionalSavingsNeeded = targetSavings - currentSavings;
+
+    // Category-based recommendations
+    const recommendations = [];
+    const categoryBreakdown = currentStats.categoryBreakdown || [];
+
+    if (additionalSavingsNeeded > 0 && categoryBreakdown.length > 0) {
+      // Find categories where we can cut
+      const discretionaryCategories = ['Entertainment', 'Shopping', 'Food & Dining', 'Personal Care'];
+      
+      for (const cat of categoryBreakdown) {
+        if (discretionaryCategories.some(d => cat.name.includes(d))) {
+          const potentialSaving = cat.total * 0.2; // 20% reduction
+          recommendations.push({
+            category: cat.name,
+            currentSpending: cat.total,
+            suggestedReduction: Math.round(potentialSaving),
+            suggestedBudget: Math.round(cat.total - potentialSaving),
+            tip: `Reduce ${cat.name} spending by 20% to save ₹${Math.round(potentialSaving)}/month`,
+          });
+        }
+      }
+    }
+
+    return {
+      currentFinancials: {
+        averageIncome: Math.round(avgIncome),
+        averageSpending: Math.round(avgSpending),
+        currentSavingsRate: avgIncome > 0 ? Math.round((currentSavings / avgIncome) * 100) : 0,
+        currentMonthlySavings: Math.round(currentSavings),
+      },
+      targetFinancials: {
+        targetSavingsRate: targetSavingsPercent,
+        targetMonthlySavings: Math.round(targetSavings),
+        targetSpendingLimit: Math.round(avgIncome - targetSavings),
+        additionalSavingsNeeded: Math.round(Math.max(0, additionalSavingsNeeded)),
+      },
+      recommendations,
+      overallAdvice: additionalSavingsNeeded <= 0
+        ? `Great job! You're already meeting or exceeding your ${targetSavingsPercent}% savings goal.`
+        : `To reach your ${targetSavingsPercent}% savings goal, you need to save an additional ₹${Math.round(additionalSavingsNeeded)}/month.`,
+    };
+  }
+
+  // ============================================================================
   // CONTEXT LOADING
   // ============================================================================
+
 
   async loadUserContext(): Promise<any> {
     const [categories, paymentMethods, recentExpenses, unpaidDebts, upcomingReminders] = 

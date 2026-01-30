@@ -1,0 +1,219 @@
+/**
+ * Test Cases for Financial Agent
+ * 
+ * Run with: npx ts-node scripts/test-agent.ts
+ * 
+ * Make sure to set up your .env file with:
+ * - SUPABASE_URL
+ * - SUPABASE_SERVICE_ROLE_KEY
+ * - GOOGLE_API_KEY1 (or other API keys)
+ * - KV_REST_API_URL
+ * - KV_REST_API_TOKEN
+ */
+
+import { config } from 'dotenv';
+config();
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+
+// Replace with a valid clerk_id from your database
+const TEST_USER_ID = 'YOUR_CLERK_ID_HERE';
+
+interface TestCase {
+  name: string;
+  message: string;
+  expectedAction?: string;
+  category?: string;
+}
+
+// ============================================================================
+// TEST CASES
+// ============================================================================
+
+const testCases: TestCase[] = [
+  // ==================== FORECASTING & ANALYSIS TESTS ====================
+  {
+    name: 'Check affordability',
+    message: 'Can I afford an iPhone 16 costing 79000?',
+    expectedAction: 'check_affordability',
+  },
+  {
+    name: 'Get spending trends',
+    message: 'How is my spending trending over the last 6 months?',
+    expectedAction: 'get_spending_trends',
+  },
+  {
+    name: 'Compare months',
+    message: 'Compare my spending for the last 3 months',
+    expectedAction: 'get_multi_month_comparison',
+  },
+  {
+    name: 'Financial forecast',
+    message: 'When can I save 1 lakh rupees?',
+    expectedAction: 'get_financial_forecast',
+  },
+  {
+    name: 'Budget recommendation',
+    message: 'I want to save 30% of my income, give me a budget plan',
+    expectedAction: 'get_budget_recommendation',
+  },
+
+  // ==================== NATURAL LANGUAGE TESTS ====================
+  {
+    name: 'Casual expense mention',
+    message: 'Had lunch for 350',
+    expectedAction: 'expense_added',
+  },
+  {
+    name: 'Multiple items mentioned',
+    message: 'Spent 200 on metro and 150 on snacks',
+    expectedAction: 'expense_added',
+  },
+  {
+    name: 'Question about finances',
+    message: 'Am I spending too much on food?',
+  },
+];
+
+// ============================================================================
+// TEST RUNNER
+// ============================================================================
+
+async function testChat(message: string, userId: string): Promise<{ response: string; actions: string[] }> {
+  const response = await fetch(`${API_URL}/api/chat`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      message,
+      userId,
+      stream: false, // Use non-streaming for easier testing
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(`API Error: ${error.error}`);
+  }
+
+  return response.json();
+}
+
+async function runTest(testCase: TestCase, userId: string): Promise<{ passed: boolean; details: string }> {
+  console.log(`\n🧪 Testing: ${testCase.name}`);
+  console.log(`   Message: "${testCase.message}"`);
+
+  try {
+    const result = await testChat(testCase.message, userId);
+    
+    console.log(`   Response: ${result.response.substring(0, 100)}...`);
+    
+    if (result.actions && result.actions.length > 0) {
+      console.log(`   Actions: ${result.actions.join(', ')}`);
+    }
+
+    // Check if expected action was performed
+    if (testCase.expectedAction) {
+      const hasExpectedAction = result.actions?.some(a => 
+        a.toLowerCase().includes(testCase.expectedAction!.replace('_', ' '))
+      );
+      
+      if (!hasExpectedAction) {
+        return {
+          passed: false,
+          details: `Expected action "${testCase.expectedAction}" not found`,
+        };
+      }
+    }
+
+    return { passed: true, details: 'OK' };
+  } catch (error: any) {
+    return { passed: false, details: error.message };
+  }
+}
+
+async function runAllTests() {
+  console.log('='.repeat(60));
+  console.log('🚀 Financial Agent Test Suite');
+  console.log('='.repeat(60));
+  console.log(`\nAPI URL: ${API_URL}`);
+  console.log(`User ID: ${TEST_USER_ID}`);
+  
+  if (TEST_USER_ID === 'YOUR_CLERK_ID_HERE') {
+    console.error('\n❌ ERROR: Please set TEST_USER_ID to a valid clerk_id from your database');
+    console.log('\nTo find a valid clerk_id, run:');
+    console.log('  SELECT clerk_id FROM users LIMIT 1;');
+    return;
+  }
+
+  const results: { name: string; passed: boolean; details: string }[] = [];
+
+  for (const testCase of testCases) {
+    const result = await runTest(testCase, TEST_USER_ID);
+    results.push({ name: testCase.name, ...result });
+    
+    // Add delay between requests to avoid rate limiting
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }
+
+  // Summary
+  console.log('\n' + '='.repeat(60));
+  console.log('📊 Test Results Summary');
+  console.log('='.repeat(60));
+
+  const passed = results.filter(r => r.passed).length;
+  const failed = results.filter(r => !r.passed).length;
+
+  console.log(`\n✅ Passed: ${passed}`);
+  console.log(`❌ Failed: ${failed}`);
+  console.log(`📝 Total:  ${results.length}`);
+
+  if (failed > 0) {
+    console.log('\n❌ Failed Tests:');
+    results.filter(r => !r.passed).forEach(r => {
+      console.log(`   - ${r.name}: ${r.details}`);
+    });
+  }
+}
+
+// Run a single test interactively
+async function runSingleTest(message: string) {
+  console.log('='.repeat(60));
+  console.log('🧪 Single Test Mode');
+  console.log('='.repeat(60));
+  
+  if (TEST_USER_ID === 'YOUR_CLERK_ID_HERE') {
+    console.error('\n❌ ERROR: Please set TEST_USER_ID to a valid clerk_id');
+    return;
+  }
+
+  console.log(`\nMessage: "${message}"`);
+  
+  try {
+    const result = await testChat(message, TEST_USER_ID);
+    console.log('\n📤 Response:');
+    console.log(result.response);
+    
+    if (result.actions?.length > 0) {
+      console.log('\n✅ Actions performed:');
+      result.actions.forEach(a => console.log(`   - ${a}`));
+    }
+  } catch (error: any) {
+    console.error('\n❌ Error:', error.message);
+  }
+}
+
+// ============================================================================
+// MAIN
+// ============================================================================
+
+const args = process.argv.slice(2);
+
+if (args.length > 0) {
+  // Run single test with provided message
+  runSingleTest(args.join(' '));
+} else {
+  // Run all tests
+  runAllTests();
+}

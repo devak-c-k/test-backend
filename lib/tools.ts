@@ -160,6 +160,101 @@ export const getSpendingByCategoryTool: FunctionDeclaration = {
 };
 
 // ============================================================================
+// FORECASTING & ANALYSIS TOOLS
+// ============================================================================
+
+export const getMultiMonthComparisonTool: FunctionDeclaration = {
+  name: 'get_multi_month_comparison',
+  description: 'Compare spending and income across multiple months. Use this to find which month had highest/lowest spending, compare trends, analyze patterns over time.',
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      num_months: {
+        type: SchemaType.NUMBER,
+        description: 'Number of months to compare (default 6, max 12)',
+      },
+    },
+    required: [],
+  },
+};
+
+export const getSpendingTrendsTool: FunctionDeclaration = {
+  name: 'get_spending_trends',
+  description: 'Analyze spending trends over time. Shows month-over-month changes, identifies increasing/decreasing patterns, and highlights unusual spending.',
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      num_months: {
+        type: SchemaType.NUMBER,
+        description: 'Number of months to analyze (default 6)',
+      },
+      category: {
+        type: SchemaType.STRING,
+        description: 'Optional: analyze trends for a specific category',
+      },
+    },
+    required: [],
+  },
+};
+
+export const getFinancialForecastTool: FunctionDeclaration = {
+  name: 'get_financial_forecast',
+  description: 'Predict future savings and spending based on historical data. Use for financial planning, goal setting, and answering questions like "When can I afford X?"',
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      forecast_months: {
+        type: SchemaType.NUMBER,
+        description: 'Number of months to forecast ahead (default 3, max 12)',
+      },
+      target_savings: {
+        type: SchemaType.NUMBER,
+        description: 'Optional: A savings target amount to calculate when it can be reached',
+      },
+    },
+    required: [],
+  },
+};
+
+export const checkAffordabilityTool: FunctionDeclaration = {
+  name: 'check_affordability',
+  description: 'Check if user can afford a purchase and when. Analyzes current savings rate and predicts when a target amount can be saved. Use for questions like "Can I afford an iPhone?", "When can I buy a car?"',
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      item_name: {
+        type: SchemaType.STRING,
+        description: 'Name of the item user wants to buy',
+      },
+      item_cost: {
+        type: SchemaType.NUMBER,
+        description: 'Cost of the item',
+      },
+      current_savings: {
+        type: SchemaType.NUMBER,
+        description: 'User current savings (optional, will be estimated from data if not provided)',
+      },
+    },
+    required: ['item_name', 'item_cost'],
+  },
+};
+
+export const getBudgetRecommendationTool: FunctionDeclaration = {
+  name: 'get_budget_recommendation',
+  description: 'Get personalized budget recommendations based on spending patterns. Suggests areas to cut spending and how much to save.',
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      savings_goal_percent: {
+        type: SchemaType.NUMBER,
+        description: 'Target savings percentage (e.g., 20 for 20%)',
+      },
+    },
+    required: [],
+  },
+};
+
+// ============================================================================
 // DEBT TOOLS
 // ============================================================================
 
@@ -433,6 +528,13 @@ export const allTools: FunctionDeclaration[] = [
   getMonthlyStatsTool,
   getSpendingByCategoryTool,
   
+  // Forecasting & Analysis
+  getMultiMonthComparisonTool,
+  getSpendingTrendsTool,
+  getFinancialForecastTool,
+  checkAffordabilityTool,
+  getBudgetRecommendationTool,
+  
   // Debts
   addDebtTool,
   updateDebtTool,
@@ -461,6 +563,11 @@ export type ToolName =
   | 'get_expenses'
   | 'get_monthly_stats'
   | 'get_spending_by_category'
+  | 'get_multi_month_comparison'
+  | 'get_spending_trends'
+  | 'get_financial_forecast'
+  | 'check_affordability'
+  | 'get_budget_recommendation'
   | 'add_debt'
   | 'update_debt'
   | 'delete_debt'
@@ -473,3 +580,4 @@ export type ToolName =
   | 'create_user_category'
   | 'delete_user_category'
   | 'get_payment_methods';
+
