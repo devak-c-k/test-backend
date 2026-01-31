@@ -3,11 +3,12 @@ import { createClient } from '@supabase/supabase-js';
 // Environment variables
 const SETU_CLIENT_ID = process.env.SETU_CLIENT_ID;
 const SETU_CLIENT_SECRET = process.env.SETU_CLIENT_SECRET;
-const SETU_BASE_URL = process.env.SETU_ENV === 'production' 
-  ? 'https://fiu-api.setu.co' 
-  : 'https://fiu-sandbox.setu.co';
-
 const PRODUCT_INSTANCE_ID = process.env.SETU_PRODUCT_INSTANCE_ID;
+
+const SETU_AUTH_URL = 'https://orgservice-prod.setu.co/v1/users/login';
+const SETU_BASE_URL = process.env.SETU_ENV === 'production' 
+  ? 'https://fiu-api.setu.co/v2' 
+  : 'https://fiu-sandbox.setu.co/v2';
 
 // Types
 interface CreateConsentParams {
@@ -22,78 +23,98 @@ interface ConsentResponse {
 }
 
 /**
- * Generate Setu API Headers (Auth)
+ * 1. Get Access Token (OAuth Client Credentials)
  */
-const getHeaders = () => {
+async function getAccessToken() {
+  if (!SETU_CLIENT_ID || !SETU_CLIENT_SECRET) {
+      throw new Error("Missing SETU_CLIENT_ID or SETU_CLIENT_SECRET");
+  }
+
+  try {
+      const res = await fetch(SETU_AUTH_URL, {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json',
+              'client': 'bridge' // Required custom header for Setu
+          },
+          body: JSON.stringify({
+              clientID: SETU_CLIENT_ID,
+              secret: SETU_CLIENT_SECRET,
+              grant_type: 'client_credentials'
+          })
+      });
+
+      const data = await res.json();
+      
+      if (!res.ok || !data.access_token) {
+          console.error("Setu Auth Failed:", JSON.stringify(data));
+          throw new Error("Failed to authenticate with Setu");
+      }
+
+      return data.access_token;
+  } catch (error) {
+      console.error("Setu Auth Error:", error);
+      throw error;
+  }
+}
+
+/**
+ * Helper to get Authenticated Headers
+ */
+const getHeaders = async () => {
+  const token = await getAccessToken();
   return {
     'Content-Type': 'application/json',
-    'x-client-id': SETU_CLIENT_ID!,
-    'x-client-secret': SETU_CLIENT_SECRET!,
+    'Authorization': `Bearer ${token}`,
     'x-product-instance-id': PRODUCT_INSTANCE_ID!
   };
 };
 
 /**
- * 1. Create Consent Request
+ * 2. Create Consent Request (V2)
  */
 export async function createConsentRequest({ userId, mobileNumber }: CreateConsentParams): Promise<ConsentResponse> {
   const endpoint = `${SETU_BASE_URL}/consents`;
   
+  // V2 Payload Structure
   const payload = {
-    detail: {
-      consentStart: new Date().toISOString(),
-      consentExpiry: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(), // 1 Year
-      ConsentMode: "STORE",
-      fetchType: "PERIODIC",
-      consentTypes: ["TRANSACTIONS", "PROFILE", "SUMMARY"],
-      fiTypes: ["DEPOSIT"],
-      DataLife: {
-        unit: "YEAR",
-        value: 1
-      },
-      Frequency: {
-        value: 30,
-        unit: "DAY"
-      },
-      DataFilter: [
-        {
-          type: "TRANSACTIONAMOUNT",
-          value: "100",
-          operator: ">="
-        }
-      ]
+    vua: mobileNumber, // "9876543210"
+    consentDuration: {
+        unit: "YEAR", // or MONTH
+        value: "1"
     },
-    context: [
-      { key: "accounttype", value: "SAVINGS" }
-    ],
-    // Setu requires HTTPS redirect URL. We point to our backend, which redirects to the app.
-    redirectUrl: "https://test-backend-theta-one.vercel.app/api/setu/frontend-callback",
-    Customer: {
-      id: userId // Our DB User ID
+    dataRange: {
+        from: new Date(new Date().setFullYear(new Date().getFullYear() - 1)).toISOString(), // 1 Year back
+        to: new Date().toISOString()
+    },
+    // Optional: Data Life, Frequency etc. can be added if needed based on V2 spec
+    // For Sandbox default minimal payload usually works
+    
+    // Redirect URL is usually configured in the Bridge Dashboard, 
+    // or passed if API supports it. V2 might rely on Dashboard config.
+    // We'll try passing it if supported, otherwise rely on Dashboard.
+    additionalData: {
+        redirectUrl: "https://test-backend-theta-one.vercel.app/api/setu/frontend-callback"
     }
   };
 
   try {
+    const headers = await getHeaders();
+    console.log(`Creating Consent at ${endpoint} with ProductID: ${PRODUCT_INSTANCE_ID}`);
+
     const res = await fetch(endpoint, {
       method: "POST",
-      headers: getHeaders(),
+      headers: headers,
       body: JSON.stringify(payload)
     });
 
     const text = await res.text();
-    // console.log("Setu Raw Response:", text); // Uncomment for full debug
-
     let data;
-    try {
-      data = JSON.parse(text);
-    } catch (e) {
-      console.error(`Setu API Invalid JSON: URL: ${endpoint} Status: ${res.status} Body: ${text.substring(0, 500)}`);
-      throw new Error(`Setu API returned non-JSON response: ${res.status} ${res.statusText}`);
-    }
-    
+    try { data = JSON.parse(text); } catch(e) { data = { error: text }; }
+
     if (!res.ok) {
       console.error("Setu Consent Error:", JSON.stringify(data));
-      throw new Error(data.message || "Failed to create consent");
+      throw new Error(data.message || data.errorMsg || "Failed to create consent");
     }
 
     return {
@@ -109,25 +130,26 @@ export async function createConsentRequest({ userId, mobileNumber }: CreateConse
 }
 
 /**
- * 2. Get Consent Status
+ * 3. Get Consent Status
  */
 export async function getConsentStatus(consentId: string) {
   const endpoint = `${SETU_BASE_URL}/consents/${consentId}`;
-  
-  const res = await fetch(endpoint, { headers: getHeaders() });
+  const headers = await getHeaders();
+  const res = await fetch(endpoint, { headers });
   return res.json();
 }
 
 /**
- * 3. Create Data Session (After Consent Active)
+ * 4. Create Data Session
  */
 export async function createDataSession(consentId: string, fromDate: string, toDate: string) {
   const endpoint = `${SETU_BASE_URL}/sessions`;
+  const headers = await getHeaders();
   
   const payload = {
     consentId,
-    DataRange: {
-      from: fromDate, // ISO Date
+    dataRange: {
+      from: fromDate,
       to: toDate
     },
     format: "json"
@@ -135,7 +157,7 @@ export async function createDataSession(consentId: string, fromDate: string, toD
 
   const res = await fetch(endpoint, {
     method: "POST",
-    headers: getHeaders(),
+    headers,
     body: JSON.stringify(payload)
   });
   
@@ -143,10 +165,11 @@ export async function createDataSession(consentId: string, fromDate: string, toD
 }
 
 /**
- * 4. Fetch FI Data (After Session Ready)
+ * 5. Fetch FI Data
  */
 export async function fetchFIData(sessionId: string) {
   const endpoint = `${SETU_BASE_URL}/sessions/${sessionId}`;
-  const res = await fetch(endpoint, { headers: getHeaders() });
+  const headers = await getHeaders();
+  const res = await fetch(endpoint, { headers });
   return res.json();
 }
