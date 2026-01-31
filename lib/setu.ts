@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 // Environment variables
 const SETU_CLIENT_ID = process.env.SETU_CLIENT_ID;
 const SETU_CLIENT_SECRET = process.env.SETU_CLIENT_SECRET;
-const SETU_BASE_URL = process.env.NODE_ENV === 'production' 
+const SETU_BASE_URL = process.env.SETU_ENV === 'production' 
   ? 'https://fiu-api.setu.co' 
   : 'https://fiu-sandbox-api.setu.co';
 
