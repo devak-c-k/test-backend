@@ -33,12 +33,16 @@ async function getAccessToken() {
   // Defensive: Trim keys in case of accidental whitespace in .env
   const clientID = SETU_CLIENT_ID.trim();
   const secret = SETU_CLIENT_SECRET.trim();
+  
+  console.log(`[Setu Auth] Using ClientID: ${clientID.substring(0, 5)}... Secret: ${secret.substring(0, 5)}...`);
 
   try {
       const res = await fetch(SETU_AUTH_URL, {
           method: 'POST',
           headers: {
               'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'User-Agent': 'ExpenseTracker/1.0',
               'client': 'bridge' // Required custom header for Setu
           },
           body: JSON.stringify({
