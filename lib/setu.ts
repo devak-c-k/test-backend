@@ -80,7 +80,16 @@ export async function createConsentRequest({ userId, mobileNumber }: CreateConse
       body: JSON.stringify(payload)
     });
 
-    const data = await res.json();
+    const text = await res.text();
+    // console.log("Setu Raw Response:", text); // Uncomment for full debug
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      console.error(`Setu API Invalid JSON: URL: ${endpoint} Status: ${res.status} Body: ${text.substring(0, 500)}`);
+      throw new Error(`Setu API returned non-JSON response: ${res.status} ${res.statusText}`);
+    }
     
     if (!res.ok) {
       console.error("Setu Consent Error:", JSON.stringify(data));

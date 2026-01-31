@@ -12,6 +12,7 @@
     "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.45.0",
     "@upstash/redis": "^1.36.1",
+    "dotenv": "^17.2.3",
     "expo-server-sdk": "^4.0.0",
     "next": "16.1.4",
     "node-fetch": "^3.3.2",

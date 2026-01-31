@@ -612,6 +612,11 @@ export class UserDataBoundary {
   }): Promise<any> {
     const userId = await this.getInternalUserId();
 
+    // Determine if reminder should be enabled
+    // Enable if any reminder properties are provided or if it's recurring
+    const reminderEnabled = !!params.reminder_schedule || !!params.reminder_time || !!params.is_recurring;
+    const reminderSchedule = reminderEnabled ? (params.reminder_schedule || 'once') : 'once';
+
     const { data, error } = await this.supabase
       .from('debts')
       .insert({
@@ -623,8 +628,8 @@ export class UserDataBoundary {
         description: params.description || null,
         due_date: params.due_date || null,
         is_recurring: params.is_recurring || false,
-        reminder_enabled: !!params.reminder_schedule || false,
-        reminder_schedule: params.reminder_schedule || 'once',
+        reminder_enabled: reminderEnabled,
+        reminder_schedule: reminderSchedule,
         reminder_time: params.reminder_time || '09:00:00',
       })
       .select()
@@ -633,7 +638,8 @@ export class UserDataBoundary {
     if (error) throw new Error(`Failed to create debt: ${error.message}`);
 
     // If reminder is enabled and we have a due date, create the initial reminder
-    if (params.reminder_schedule && params.due_date) {
+    // Use the computed reminderEnabled flag
+    if (reminderEnabled && params.due_date) {
       try {
         let scheduledFor = params.due_date;
         const time = params.reminder_time || '09:00:00';
