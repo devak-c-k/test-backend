@@ -29,7 +29,9 @@ export async function GET(request: Request) {
       query = query.gte('expense_date', startDate);
     }
     if (endDate) {
-      query = query.lte('expense_date', endDate);
+      // Ensure we include the full day by setting time to end of day
+      const queryEndDate = endDate.includes('T') ? endDate : `${endDate}T23:59:59`;
+      query = query.lte('expense_date', queryEndDate);
     }
 
     const { data, error } = await query;

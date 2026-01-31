@@ -133,6 +133,8 @@ export class FinancialAgent {
             description: params.description,
             due_date: params.due_date,
             is_recurring: params.is_recurring,
+            reminder_schedule: params.reminder_schedule,
+            reminder_time: params.reminder_time,
           });
           return {
             success: true,

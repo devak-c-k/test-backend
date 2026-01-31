@@ -607,6 +607,8 @@ export class UserDataBoundary {
     description?: string;
     due_date?: string;
     is_recurring?: boolean;
+    reminder_schedule?: 'once' | 'daily' | 'weekly' | 'monthly';
+    reminder_time?: string;
   }): Promise<any> {
     const userId = await this.getInternalUserId();
 
@@ -621,14 +623,91 @@ export class UserDataBoundary {
         description: params.description || null,
         due_date: params.due_date || null,
         is_recurring: params.is_recurring || false,
-        reminder_enabled: false,
-        reminder_time: '09:00:00',
+        reminder_enabled: !!params.reminder_schedule || false,
+        reminder_schedule: params.reminder_schedule || 'once',
+        reminder_time: params.reminder_time || '09:00:00',
       })
       .select()
       .single();
 
     if (error) throw new Error(`Failed to create debt: ${error.message}`);
+
+    // If reminder is enabled and we have a due date, create the initial reminder
+    if (params.reminder_schedule && params.due_date) {
+      try {
+        let scheduledFor = params.due_date;
+        const time = params.reminder_time || '09:00:00';
+        
+        // Combine date and time
+        if (!scheduledFor.includes('T')) {
+          scheduledFor = `${scheduledFor}T${time}`;
+        }
+
+        await this.createReminder({
+          debt_id: data.id,
+          scheduled_for: scheduledFor,
+        });
+      } catch (e) {
+        console.error('Failed to create initial reminder:', e);
+        // Don't fail the whole operation
+      }
+    }
+
     return data;
+  }
+
+  // ============================================================================
+  // INTERNAL HELPERS
+  // ============================================================================
+
+  private async scheduleWithQStash(reminder: any) {
+    const QSTASH_TOKEN = process.env.QSTASH_TOKEN;
+    const QSTASH_URL = process.env.QSTASH_URL || 'https://qstash.upstash.io';
+    const WEBHOOK_URL = process.env.NEXT_PUBLIC_API_URL || process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
+
+    if (!QSTASH_TOKEN) {
+      console.warn('[QStash] Token is missing, skipping scheduling');
+      return;
+    }
+
+    try {
+      const scheduledTime = new Date(reminder.scheduled_for).getTime();
+      const delay = Math.max(0, Math.floor((scheduledTime - Date.now()) / 1000));
+      
+      console.log(`[QStash] Scheduling reminder for ${reminder.scheduled_for}. Delay: ${delay}s`);
+
+      const qstashUrl = `${QSTASH_URL}/v2/publish/${WEBHOOK_URL}/api/webhooks/reminder`;
+      
+      const response = await fetch(qstashUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${QSTASH_TOKEN}`,
+          'Content-Type': 'application/json',
+          'Upstash-Delay': `${delay}s`,
+        },
+        body: JSON.stringify({
+          reminder_id: reminder.id,
+          debt_id: reminder.debt_id,
+          user_id: reminder.user_id,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Update reminder with message ID
+        await this.supabase
+          .from('reminders')
+          .update({ qstash_message_id: data.messageId })
+          .eq('id', reminder.id);
+          
+        console.log('[QStash] Scheduled successfully:', data.messageId);
+      } else {
+        console.error('[QStash] Failed to schedule:', await response.text());
+      }
+    } catch (error) {
+      console.error('[QStash] Scheduling error:', error);
+    }
   }
 
   async updateDebt(debtId: string, params: {
@@ -738,6 +817,10 @@ export class UserDataBoundary {
       .single();
 
     if (error) throw new Error(`Failed to create reminder: ${error.message}`);
+    
+    // Schedule with QStash
+    await this.scheduleWithQStash(data);
+    
     return data;
   }
 

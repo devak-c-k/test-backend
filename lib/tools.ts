@@ -292,6 +292,14 @@ export const addDebtTool: FunctionDeclaration = {
         type: SchemaType.BOOLEAN,
         description: 'Whether this is a recurring debt/subscription',
       },
+      reminder_schedule: {
+        type: SchemaType.STRING,
+        description: 'Schedule for reminders. Options: "once", "daily", "weekly", "monthly". Default: "once" if due_date is set.',
+      },
+      reminder_time: {
+        type: SchemaType.STRING,
+        description: 'Time for reminder in HH:MM:SS format. Default: "09:00:00"',
+      },
     },
     required: ['name', 'amount', 'debt_type', 'direction'],
   },
