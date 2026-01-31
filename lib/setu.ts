@@ -30,6 +30,10 @@ async function getAccessToken() {
       throw new Error("Missing SETU_CLIENT_ID or SETU_CLIENT_SECRET");
   }
 
+  // Defensive: Trim keys in case of accidental whitespace in .env
+  const clientID = SETU_CLIENT_ID.trim();
+  const secret = SETU_CLIENT_SECRET.trim();
+
   try {
       const res = await fetch(SETU_AUTH_URL, {
           method: 'POST',
@@ -38,17 +42,26 @@ async function getAccessToken() {
               'client': 'bridge' // Required custom header for Setu
           },
           body: JSON.stringify({
-              clientID: SETU_CLIENT_ID,
-              secret: SETU_CLIENT_SECRET,
+              clientID: clientID,
+              secret: secret,
               grant_type: 'client_credentials'
-          })
+          }),
+          cache: 'no-store' // Ensure fresh request
       });
 
-      const data = await res.json();
+      const text = await res.text();
+
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        console.error(`Setu Auth Raw Response (Not JSON): ${text}`);
+        throw new Error(`Setu Auth returned invalid JSON: ${text.substring(0, 100)}`);
+      }
       
       if (!res.ok || !data.access_token) {
           console.error("Setu Auth Failed:", JSON.stringify(data));
-          throw new Error("Failed to authenticate with Setu");
+          throw new Error(data.message || "Failed to authenticate with Setu");
       }
 
       return data.access_token;
