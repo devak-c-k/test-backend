@@ -41,16 +41,13 @@ async function getAccessToken() {
           method: 'POST',
           headers: {
               'Content-Type': 'application/json',
-              'Accept': 'application/json',
-              'User-Agent': 'ExpenseTracker/1.0',
               'client': 'bridge' // Required custom header for Setu
           },
           body: JSON.stringify({
               clientID: clientID,
               secret: secret,
               grant_type: 'client_credentials'
-          }),
-          cache: 'no-store' // Ensure fresh request
+          })
       });
 
       const text = await res.text();
